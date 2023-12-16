@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Application, Sprite, Texture } from "pixi.js";
+import { useEffect, useRef } from "react";
+import { Application, Assets, Sprite, Texture } from "pixi.js";
 import crosshair from "./assets/crosshair.png";
 import gif from "./assets/test.gif";
 import { AnimatedGIF } from "@pixi/gif";
@@ -9,12 +9,14 @@ import { AnimatedGIF } from "@pixi/gif";
 
 /** Strahlenterapie Interaktion Prototype
  * @author: Johannes Dejori
- * @version: 0.1
+ * @version: 0.2
  * @returns: PixiJS Canvas with GIF Animation Cells and Crosshair in div #interaktion
- *
+ * 
  * @todo: Implement Pixis Loader
  * @todo: Implement responsive crosshair
- * @throws: Error: Renders one additional cell(s) Gif in upper left corner
+ * @todo: fetchPromise maybe in useLayoutEffect()?
+ * 
+ * @throws: Error: Renders one additional cell Gif in upper left corner
  * @throws: Error: useEffect() is called multiple times
  */
 
@@ -49,11 +51,13 @@ export default function Main(props: PageProps) {
     // Keeps track of the current press state of the cell
     pressState = useRef(false),
 
-    // Array of cell GIF Animation Promises (Only for Gifs or Json Objects)
-    fetchPromisesRef = useRef<Promise<AnimatedGIF>[]>([]),
-
     // Array of cell GIF Animations
     cellGifsRef = useRef<AnimatedGIF[]>([]),
+
+    /** Use 'useRef' to ensure that the crosshairPosition is not updated on rerendering
+     * WRONG: //[crosshairPosition, setCrosshairPosition] = useState({ x: 0, y: 0 }),
+     */
+    crosshairPosition = useRef({ x: 0, y: 0 }),
 
     /** PixiJS Vanilla JS Initialization
      * - useRef() to initialize the PixiJS Application once the component is mounted and prevent rerendering
@@ -82,12 +86,7 @@ export default function Main(props: PageProps) {
         randomSin: getRandomInRange(0, 10),
       }))
     ),
-
-    /** Use 'useRef' to ensure that the crosshairPosition is not updated on rerendering
-     * WRONG: //[crosshairPosition, setCrosshairPosition] = useState({ x: 0, y: 0 }),
-     */
-    crosshairPosition = useRef({ x: 0, y: 0 }),
-
+    
     /** Handles mouse movement on the canvas and updates the crosshairPosition
      * (npm install @types/pixi.js)
      */
@@ -129,55 +128,121 @@ export default function Main(props: PageProps) {
 
   // useEffect() is called after the component is mounted and on dependency changes in callback []
   useEffect(() => {
-    console.log("useEffect() called");
+
+    console.log(gif)
 
     // Mounting PixiJS Application to the DOM
     document.getElementById("interaktion")?.appendChild(app.current.view);
+    console.log("PixiJS Application mounted");
 
     /** Fetches Asynchron Promise for each cell Gif and stores them in fetchPromisesRef Array
      *  This is only needed for GIFs and Json Obects
      */
-    for (let i = 0; i < props.cells; i++) {
-      const fetchPromise: Promise<AnimatedGIF> = fetch(gif)
-        .then((res) => res.arrayBuffer())
-        .then(AnimatedGIF.fromBuffer);
 
-      fetchPromisesRef.current.push(fetchPromise);
-    }
+    const gifPromise = Assets.load(gif);
 
-    /** Waits for all above Promises for further postprocessing
-     * Should be replaced with Pixi.js Loader in future for better performance, error handling and fetching event data
-     */
-    Promise.all(fetchPromisesRef.current)
-      .then((gifs) => {
-        //
-        gifs.forEach((gifAnim) => {
+    gifPromise.then((gifAnim) => {
+      console.log("GIF Animation Promises fetched")
+      console.log(gifAnim)
+
+      for(let i = 0; i < props.cells; i++) {
+        cellGifsRef.current.push(gifAnim)
+      }
+      console.log("cellGifsRef filled")
+
+      cellGifsRef.current.forEach((testGif) => {
+        
+        // Setup GIF Animation Cell Properties
+        testGif.width = 100;
+        testGif.height = 100;
+        testGif.scale.set(0.2);
+        testGif.eventMode = 'dynamic'
+
+        testGif.on("pointerdown", handleMouseDown);
+        testGif.on("pointerup", handleMouseUp);
+        testGif.on("pointerover", handleMouseOver);
+        testGif.on("pointerout", handleMouseOut);
+
+        // Adds GIF Animation to Stage
+        app.current.stage.addChild(testGif);
+      })
+
+      console.log("Gifs added to Stage")
+      //console.log(cellGifsRef.current);
+
+      // Creates Texture Object for crrosshair sprite (PNG)
+      const crosshairTexture = Texture.from(crosshair);
+
+      // Creates & add crosshair Sprite to Stage
+      const crosshairSprite = new Sprite(crosshairTexture);
+      app.current.stage.addChild(crosshairSprite);
+      crosshairSprite.scale.set(0.15);
+
+      // Pixi.js Render Loop
+      console.log("PixiJS Render Loop started")
+      app.current.ticker.add(() => {
+        for (let i = 0; i < props.cells; i++) {
+
+          // Updates cell position
+          positions.current[i].randomSin += 0.001;
+
+          positions.current[i].x =
+            Math.sin(positions.current[i].randomSin) * 250 + 250;
+          positions.current[i].y =
+            Math.sin(positions.current[i].randomSin / 1.5) * 250 + 250;
+
+          cellGifsRef.current[i].x = positions.current[i].x;
+          cellGifsRef.current[i].y = positions.current[i].y;
+
+          // Updates crosshair position
+          crosshairSprite.x = crosshairPosition.current.x;
+          crosshairSprite.y = crosshairPosition.current.y;
+
+          // Triggers GIF Animation
+          if (scaleState.current && pressState.current) {
+            console.log("GIF Animation triggered");
+          }
+        }
+      });
+      console.log("PixiJS Render Loop stopped")
+      
+    }).catch((error) => {
+      console.error('Fehler beim Laden der Daten:', error); // Errorhandling
+    })
+
+    /* ASYNC AWAIT VERSION -> DOES NOT WORK
+    async function initGifLoad() {
+      try {
+        const gifAnim = await Assets.load(gif)
+        console.log("GIF Animation Promises fetched")
+        console.log(gifAnim)
+
+        for(let i = 0; i < props.cells; i++) {
+          cellGifsRef.current.push(gifAnim)
+        }
+        console.log("cellGifsRef filled")
+
+        cellGifsRef.current.forEach((testGif) => {
+          
           // Setup GIF Animation Cell Properties
-          gifAnim.width = 100;
-          gifAnim.height = 100;
-          gifAnim.scale.set(0.2);
-          gifAnim.eventMode = "dynamic";
-
-          gifAnim.on("pointerdown", handleMouseDown);
-          gifAnim.on("pointerup", handleMouseUp);
-          gifAnim.on("pointerover", handleMouseOver);
-          gifAnim.on("pointerout", handleMouseOut);
-
-          /** Workaorund for PixiJS/React rerendering
-           * Avoids rendering one additional cell(s) Gif to the stage
-           * @throws: Error: useEffect() is called multiple times
-           */
+          testGif.width = 100;
+          testGif.height = 100;
+          testGif.scale.set(0.2);
+          testGif.eventMode = 'dynamic'
+  
+          testGif.on("pointerdown", handleMouseDown);
+          testGif.on("pointerup", handleMouseUp);
+          testGif.on("pointerover", handleMouseOver);
+          testGif.on("pointerout", handleMouseOut);
+  
           // Adds GIF Animation to Stage
-          if(app.current.stage.children.length < props.cells){
-            app.current.stage.addChild(gifAnim);
-          }
+          app.current.stage.addChild(testGif);
+  
           // Adds setuped GIF Animation to cellGifsRef Array for accessing them in render loop
-          if(cellGifsRef.current.length < props.cells){
-            cellGifsRef.current.push(gifAnim);
-          }
-        });
+        })
 
-        console.log(cellGifsRef.current);
+        console.log("GIF Animation Promises resolved")
+        //console.log(cellGifsRef.current);
 
         // Creates Texture Object for crrosshair sprite (PNG)
         const crosshairTexture = Texture.from(crosshair);
@@ -188,9 +253,10 @@ export default function Main(props: PageProps) {
         crosshairSprite.scale.set(0.15);
 
         // Pixi.js Render Loop
-        console.log("loop activated");
+        console.log("PixiJS Render Loop started")
         app.current.ticker.add(() => {
           for (let i = 0; i < props.cells; i++) {
+
             // Updates cell position
             positions.current[i].randomSin += 0.001;
 
@@ -212,17 +278,24 @@ export default function Main(props: PageProps) {
             }
           }
         });
-      })
-      .catch((error) => {
-        console.error("Fehler beim Laden der Daten:", error); // Errorhandling
-      });
+        console.log("PixiJS Render Loop stopped")
+      } catch (error) {
+        console.error('Fehler beim Laden der Daten:', error); // Errorhandling
+      }
+    }
+
+    initGifLoad()
+    */
 
     return () => {
       // Cleanup
       document.getElementById("interaktion")?.removeChild(app.current.view);
+      console.log("PixiJS Application unmounted");
     };
   }, []);
 
   //HTML
-  return <div id="interaktion" onMouseMove={handleMouseMove}></div>;
+  return (
+    <div id="interaktion" onMouseMove={handleMouseMove}></div>
+  );
 }

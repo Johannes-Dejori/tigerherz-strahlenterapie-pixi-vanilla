@@ -13,6 +13,7 @@ import { AnimatedGIF } from "@pixi/gif";
  * @returns: PixiJS Canvas with GIF Animation Cells and Crosshair in div #interaktion
  *
  * @todo: Implement responsive crosshair
+ * @todo: Fix useEffect() called twice -> Maybe with global Redux variable
  * @throws: Error: useEffect() is called twice -> Temporarily Fixed with:
  * if(app.current.stage.children.length < props.cells){
  *    app.current.stage.addChild(gifAnim);
@@ -108,6 +109,7 @@ export default function Main(props: PageProps) {
     },
     handleMouseDown = () => {
       pressState.current = true;
+      console.log("destroyed")
       //console.log("Mouse pressed")
     },
     handleMouseUp = () => {
@@ -208,9 +210,11 @@ export default function Main(props: PageProps) {
             crosshairSprite.y = crosshairPosition.current.y;
 
             // Triggers GIF Animation
-            if (scaleState.current && pressState.current) {
+            /* @deprecated
+              if (scaleState.current && pressState.current) {
               console.log("GIF Animation triggered");
             }
+            */
           }
         });
       })

@@ -9,13 +9,14 @@ import { AnimatedGIF } from "@pixi/gif";
 
 /** Strahlenterapie Interaktion Prototype
  * @author: Johannes Dejori
- * @version: 0.1
+ * @version: 0.2
  * @returns: PixiJS Canvas with GIF Animation Cells and Crosshair in div #interaktion
  *
- * @todo: Implement Pixis Loader
  * @todo: Implement responsive crosshair
- * @throws: Error: Renders one additional cell(s) Gif in upper left corner
- * @throws: Error: useEffect() is called multiple times
+ * @throws: Error: useEffect() is called twice -> Temporarily Fixed with:
+ * if(app.current.stage.children.length < props.cells){
+ *    app.current.stage.addChild(gifAnim);
+ *  }
  */
 
 /** Interface for the Page Propertys
@@ -171,7 +172,7 @@ export default function Main(props: PageProps) {
           if(app.current.stage.children.length < props.cells){
             app.current.stage.addChild(gifAnim);
           }
-          // Adds setuped GIF Animation to cellGifsRef Array for accessing them in render loop
+          // Adds setuped GIF Animations to cellGifsRef Array for accessing them in render loop
           if(cellGifsRef.current.length < props.cells){
             cellGifsRef.current.push(gifAnim);
           }
@@ -188,7 +189,7 @@ export default function Main(props: PageProps) {
         crosshairSprite.scale.set(0.15);
 
         // Pixi.js Render Loop
-        console.log("loop activated");
+        //console.log("loop activated");
         app.current.ticker.add(() => {
           for (let i = 0; i < props.cells; i++) {
             // Updates cell position
